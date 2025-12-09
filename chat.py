@@ -31,23 +31,23 @@ LOG = logging.getLogger("chat")
 
 
 def load_auth_module():
-    # tenta importar por nomes comuns e, se falhar, carrega por caminho procurando arquivo que contenha 'autentic'
-    candidates = ["autenticacao", "autenticação", "autentificacao", "autenticaçao", "autenticaçã o"]
-    for name in candidates:
-        try:
-            return importlib.import_module(name)
-        except Exception:
-            continue
-
-    # procurar arquivo no diretório atual que comece com 'autentic'
+    # Procurar um arquivo de autenticação no diretório atual começando por 'autent'
     cwd = pathlib.Path(".")
-    for p in cwd.glob("autentic*.py"):
+    for p in cwd.glob("autent*.py"):
         try:
             spec = importlib.util.spec_from_file_location("auth_module", str(p))
             mod = importlib.util.module_from_spec(spec)
             sys.modules["auth_module"] = mod
             spec.loader.exec_module(mod)  # type: ignore
             return mod
+        except Exception:
+            continue
+
+    # fallback: tentar importar nomes sem acento comuns
+    candidates = ["autenticacao", "autentificacao", "auth", "authentication"]
+    for name in candidates:
+        try:
+            return importlib.import_module(name)
         except Exception:
             continue
 
