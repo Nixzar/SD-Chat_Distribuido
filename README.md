@@ -48,6 +48,19 @@ C:/Python313/python.exe autenticação.py register alice
 # digite a senha quando solicitado
 ```
 
+Você também pode evitar o prompt interativo passando a senha diretamente (útil em scripts ou ambientes sem TTY):
+
+```powershell
+C:/Python313/python.exe autenticação.py register alice --password "minhaSenhaSegura"
+```
+
+Ou definindo a variável de ambiente temporariamente:
+
+```powershell
+$env:AUTH_PASSWORD = 'minhaSenhaSegura'
+C:/Python313/python.exe autenticação.py register alice
+```
+
 2. Fazer login para obter token:
 
 ```powershell

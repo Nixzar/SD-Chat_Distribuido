@@ -135,9 +135,11 @@ def main(argv=None):
 
 	p_register = sub.add_parser("register", help="Register a new user")
 	p_register.add_argument("username")
+	p_register.add_argument("-p", "--password", help="Senha (opcional; use com cuidado, evita prompt interativo)")
 
 	p_login = sub.add_parser("login", help="Authenticate and get token")
 	p_login.add_argument("username")
+	p_login.add_argument("-p", "--password", help="Senha (opcional; use com cuidado, evita prompt interativo)")
 
 	p_verify = sub.add_parser("verify", help="Verify token")
 	p_verify.add_argument("token")
@@ -145,13 +147,19 @@ def main(argv=None):
 	args = parser.parse_args(argv)
 
 	if args.cmd == "register":
-		password = _prompt_password()
+		if getattr(args, "password", None):
+			password = args.password
+		else:
+			password = _prompt_password()
 		out = register_user(args.username, password)
 		print(json.dumps(out, ensure_ascii=False))
 		return 0
 
 	if args.cmd == "login":
-		password = _prompt_password()
+		if getattr(args, "password", None):
+			password = args.password
+		else:
+			password = _prompt_password()
 		ok = authenticate_user(args.username, password)
 		if not ok:
 			print(json.dumps({"success": False, "message": "Credenciais inválidas"}, ensure_ascii=False))
@@ -176,12 +184,22 @@ def main(argv=None):
 
 
 def _prompt_password() -> str:
-	# Não usamos getpass por compatibilidade com ambientes que não suportam stdin interativo em testes
-	try:
-		import getpass
+	# Tenta usar getpass em terminais interativos.
+	# Se não houver tty (ex.: execução em ambiente não interativo), tenta ler a senha
+	# da variável de ambiente `AUTH_PASSWORD` como fallback ou instrui o usuário
+	# a usar a opção `--password`.
+	import getpass
 
+	if not sys.stdin or not sys.stdin.isatty():
+		env_pw = os.environ.get("AUTH_PASSWORD")
+		if env_pw:
+			return env_pw
+		raise RuntimeError("Entrada não interativa: forneça a senha via --password ou variavel AUTH_PASSWORD")
+
+	try:
 		return getpass.getpass("Senha: ")
 	except Exception:
+		# último recurso: input (menos seguro porque ecoa no terminal)
 		return input("Senha: ")
 
 

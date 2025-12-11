@@ -26,6 +26,7 @@ import importlib
 import importlib.util
 import pathlib
 import sys
+import os
 
 LOG = logging.getLogger("chat")
 
@@ -59,10 +60,21 @@ class ChatServer:
         self.host = host
         self.port = port
         self.app = web.Application()
+        # API routes
         self.app.add_routes([
             web.get("/ws", self.ws_handler),
-            web.get("/history/{user}" , self.history_handler),
+            web.get("/history/{user}", self.history_handler),
+            web.post("/api/login", self.login_handler),
+            web.post("/api/register", self.register_handler),
         ])
+
+        # static frontend files (served under /static) and index at /
+        static_path = pathlib.Path(__file__).parent / "frontend"
+        # index route
+        self.app.router.add_get("/", self.index_handler)
+        # static assets
+        if static_path.exists():
+            self.app.router.add_static("/static/", str(static_path), show_index=True)
         self.store = MessageStore(db_path)
         self.clients: Dict[str, web.WebSocketResponse] = {}
         self.auth = load_auth_module()
@@ -169,6 +181,67 @@ class ChatServer:
             LOG.info(f"User disconnected: {username}")
 
         return ws
+
+    async def login_handler(self, request: web.Request) -> web.Response:
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"success": False, "message": "JSON inválido"}, status=400)
+
+        username = data.get("username")
+        password = data.get("password")
+        if not username or not password:
+            return web.json_response({"success": False, "message": "username e password necessários"}, status=400)
+
+        # use auth module to verify
+        db_path = os.environ.get("AUTH_DB_PATH")
+        ok = False
+        try:
+            if db_path:
+                ok = self.auth.authenticate_user(username, password, db_path=db_path)
+            else:
+                ok = self.auth.authenticate_user(username, password)
+        except Exception:
+            ok = False
+
+        if not ok:
+            return web.json_response({"success": False, "message": "Credenciais inválidas"}, status=401)
+
+        secret = self.auth._ensure_secret()
+        token = self.auth.create_access_token({"sub": username}, secret)
+        return web.json_response({"success": True, "token": token})
+
+    async def register_handler(self, request: web.Request) -> web.Response:
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"success": False, "message": "JSON inválido"}, status=400)
+
+        username = data.get("username")
+        password = data.get("password")
+        if not username or not password:
+            return web.json_response({"success": False, "message": "username e password necessários"}, status=400)
+
+        db_path = os.environ.get("AUTH_DB_PATH")
+        try:
+            if db_path:
+                result = self.auth.register_user(username, password, db_path=db_path)
+            else:
+                result = self.auth.register_user(username, password)
+        except Exception as e:
+            return web.json_response({"success": False, "message": str(e)}, status=500)
+
+        if not result.get("success"):
+            return web.json_response(result, status=409)
+
+        return web.json_response({"success": True, "message": "Usuário registrado com sucesso"})
+
+    async def index_handler(self, request: web.Request) -> web.Response:
+        root = pathlib.Path(__file__).parent / "frontend"
+        index_file = root / "index.html"
+        if index_file.exists():
+            return web.FileResponse(str(index_file))
+        return web.Response(text="Frontend não encontrado", status=404)
 
     async def history_handler(self, request: web.Request) -> web.Response:
         # protected endpoint: token must be provided

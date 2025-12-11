@@ -1,0 +1,15 @@
+body{font-family:Arial,Helvetica,sans-serif;background:#f6f9fc;padding:24px}
+.card{background:#fff;border:1px solid #e3e8ee;padding:16px;border-radius:6px;max-width:720px;margin:12px auto}
+.hidden{display:none}
+input{display:block;padding:8px;margin:8px 0;border:1px solid #ccd6e0;border-radius:4px;width:100%}
+button{padding:8px 12px;border-radius:4px;border:0;background:#1976d2;color:#fff;cursor:pointer}
+.muted{color:#666;font-size:0.9em}
+.header{display:flex;justify-content:space-between;align-items:center}
+.messages{height:360px;overflow:auto;border:1px solid #eee;padding:8px;background:#fafcff}
+.msg{padding:6px;border-radius:6px;margin:6px 0}
+.msg.me{background:#dff3ff;text-align:right}
+.msg.other{background:#f0f0f0;text-align:left}
+.composer{display:flex;gap:8px}
+.composer input{flex:1}
+a{color:#1976d2;text-decoration:none;cursor:pointer}
+a:hover{text-decoration:underline}
