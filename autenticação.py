@@ -63,6 +63,18 @@ def _get_user_row(username: str, db_path: str = DB_PATH) -> Optional[sqlite3.Row
 	return row
 
 
+def list_users(db_path: str = DB_PATH) -> list:
+	"""Retorna a lista de usernames registrados."""
+	if not os.path.exists(db_path):
+		return []
+	conn = sqlite3.connect(db_path)
+	cur = conn.cursor()
+	cur.execute("SELECT username FROM users ORDER BY id")
+	rows = cur.fetchall()
+	conn.close()
+	return [r[0] for r in rows]
+
+
 def register_user(username: str, password: str, db_path: str = DB_PATH) -> Dict[str, Any]:
 	"""Registra um novo usuário com hash da senha.
 

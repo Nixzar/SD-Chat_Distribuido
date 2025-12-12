@@ -20,6 +20,7 @@
   let ws = null;
   let token = localStorage.getItem('sdchat.token') || null;
   let username = localStorage.getItem('sdchat.user') || null;
+  const seenIds = new Set();
 
   function showAuth(){ authBox.classList.remove('hidden'); chatBox.classList.add('hidden'); }
   function showLoginForm(){ loginForm.classList.remove('hidden'); registerForm.classList.add('hidden'); }
@@ -76,12 +77,30 @@
     const wsUrl = `${scheme}://${location.host}/ws?token=${encodeURIComponent(token)}`;
     ws = new WebSocket(wsUrl);
     ws.onopen = ()=>{
-      appendMessage('Conectado ao servidor', 'other');
+      (async ()=>{
+        // fetch history and render (avoid duplicates using seenIds)
+        try{
+          const resp = await fetch(`/history?token=${encodeURIComponent(token)}`);
+          const j = await resp.json();
+          if(j && j.success && Array.isArray(j.history)){
+            j.history.forEach(m => {
+              if(m && m.id && seenIds.has(m.id)) return;
+              if(m && m.id) seenIds.add(m.id);
+              const txt = `${m.sender}: ${m.content}`;
+              appendMessage(txt, m.sender === username ? 'me' : 'other');
+            });
+          }
+        }catch(err){ console.error('history fetch failed', err) }
+        appendMessage('Conectado ao servidor', 'other');
+      })();
     };
     ws.onmessage = ev => {
       try{
         const data = JSON.parse(ev.data);
         if(data.type === 'message'){
+          // deduplicate by id when available
+          if(data.id && seenIds.has(data.id)) return;
+          if(data.id) seenIds.add(data.id);
           const txt = `${data.sender}: ${data.content}`;
           appendMessage(txt, data.sender === username ? 'me' : 'other');
         } else if(data.type === 'ack'){

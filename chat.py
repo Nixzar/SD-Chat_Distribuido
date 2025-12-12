@@ -64,6 +64,7 @@ class ChatServer:
         self.app.add_routes([
             web.get("/ws", self.ws_handler),
             web.get("/history/{user}", self.history_handler),
+            web.get("/history", self.history_all_handler),
             web.post("/api/login", self.login_handler),
             web.post("/api/register", self.register_handler),
         ])
@@ -151,14 +152,36 @@ class ChatServer:
                         payload = {"type": "message", "id": msg_id, "sender": username, "content": content}
 
                         if to == "broadcast":
-                            # broadcast to all connected
-                            for u, c in list(self.clients.items()):
+                            # persist per-recipient so offline users will receive when reconnecting
+                            # fetch all registered users from auth module
+                            db_path = os.environ.get("AUTH_DB_PATH")
+                            try:
+                                if db_path:
+                                    all_users = self.auth.list_users(db_path=db_path)
+                                else:
+                                    all_users = self.auth.list_users()
+                            except Exception:
+                                # fallback: deliver to currently connected clients only
+                                all_users = list(self.clients.keys())
+
+                            for recipient in all_users:
+                                if recipient == username:
+                                    continue
                                 try:
-                                    await c.send_json(payload)
+                                    # save a per-recipient message
+                                    msg_id = await self.store.save_message(username, recipient, content)
                                 except Exception:
-                                    LOG.exception("Erro enviando broadcast")
-                            # mark delivered for all connected recipients
-                            # for simplicity we won't mark delivered per user here
+                                    LOG.exception("Erro salvando mensagem de broadcast para %s", recipient)
+                                    continue
+
+                                # if recipient is connected, send immediately and mark delivered
+                                recipient_ws = self.clients.get(recipient)
+                                if recipient_ws:
+                                    try:
+                                        await recipient_ws.send_json({"type": "message", "id": msg_id, "sender": username, "content": content})
+                                        await self.store.mark_delivered(msg_id)
+                                    except Exception:
+                                        LOG.exception("Erro enviando broadcast para usuário online %s", recipient)
                         else:
                             recipient_ws = self.clients.get(to)
                             if recipient_ws:
@@ -255,6 +278,19 @@ class ChatServer:
 
         other = request.match_info.get("user")
         history = await self.store.get_history(username, other)
+        return web.json_response({"success": True, "history": history})
+
+    async def history_all_handler(self, request: web.Request) -> web.Response:
+        # returns all messages involving the authenticated user
+        token = self._get_token_from_request(request)
+        if not token:
+            raise web.HTTPUnauthorized(text="Token não fornecido")
+        try:
+            username = self._verify_token(token)
+        except Exception as e:
+            raise web.HTTPUnauthorized(text=str(e))
+
+        history = await self.store.get_history(username)
         return web.json_response({"success": True, "history": history})
 
 
