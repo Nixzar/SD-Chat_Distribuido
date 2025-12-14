@@ -64,6 +64,7 @@ class ChatServer:
         self.app.add_routes([
             web.get("/ws", self.ws_handler),
             web.get("/history/{user}", self.history_handler),
+            web.get("/api/users", self.users_handler),
             web.get("/history", self.history_all_handler),
             web.post("/api/login", self.login_handler),
             web.post("/api/register", self.register_handler),
@@ -292,6 +293,20 @@ class ChatServer:
 
         history = await self.store.get_history(username)
         return web.json_response({"success": True, "history": history})
+
+    async def users_handler(self, request: web.Request) -> web.Response:
+        # return list of registered usernames
+        db_path = os.environ.get("AUTH_DB_PATH")
+        try:
+            if db_path:
+                users = self.auth.list_users(db_path=db_path)
+            else:
+                users = self.auth.list_users()
+        except Exception:
+            users = []
+        # include broadcast option
+        users_sorted = sorted(users)
+        return web.json_response({"success": True, "users": ["broadcast"] + users_sorted})
 
 
 def make_app(host: str = "0.0.0.0", port: int = 8080, db_path: str = "messages.db") -> ChatServer:

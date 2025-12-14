@@ -6,7 +6,7 @@
   const chatBox = $('#chat');
   const meSpan = $('#me');
   const messagesEl = $('#messages');
-  const toInput = $('#to');
+  const toSelect = $('#toSelect');
   const contentInput = $('#content');
   const btnLogin = $('#btnLogin');
   const btnRegister = $('#btnRegister');
@@ -92,6 +92,8 @@
           }
         }catch(err){ console.error('history fetch failed', err) }
         appendMessage('Conectado ao servidor', 'other');
+        // populate recipient list after connecting
+        try{ await populateUsers(); }catch(e){ /* ignore */ }
       })();
     };
     ws.onmessage = ev => {
@@ -115,11 +117,36 @@
 
   function doSend(){
     if(!ws || ws.readyState !== WebSocket.OPEN){ appendMessage('WebSocket não conectado', 'other'); return; }
-    const to = (toInput.value || '').trim();
+    const to = (toSelect.value || '').trim();
     const content = (contentInput.value || '').trim();
     if(!to || !content){ appendMessage('Preencha destinatário e mensagem', 'other'); return; }
+    // show message immediately on sender's view
+    const dest = to === 'broadcast' ? '(broadcast)' : `para ${to}`;
+    appendMessage(`Você ${dest}: ${content}`, 'me');
+    // send to server
     ws.send(JSON.stringify({type:'message', to: to, content: content}));
     contentInput.value = '';
+  }
+
+  async function populateUsers(){
+    try{
+      const resp = await fetch('/api/users');
+      const j = await resp.json();
+      if(!j || !j.success || !Array.isArray(j.users)) return;
+      // clear
+      toSelect.innerHTML = '';
+      j.users.forEach(u => {
+        if(u === username) return; // don't show self
+        const opt = document.createElement('option');
+        opt.value = u;
+        opt.textContent = u;
+        toSelect.appendChild(opt);
+      });
+      // ensure broadcast present
+      if(!Array.from(toSelect.options).some(o=>o.value==='broadcast')){
+        const opt = document.createElement('option'); opt.value='broadcast'; opt.textContent='broadcast'; toSelect.insertBefore(opt, toSelect.firstChild);
+      }
+    }catch(err){ console.error('failed to populate users', err) }
   }
 
   function doLogout(){
